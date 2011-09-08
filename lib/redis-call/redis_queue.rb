@@ -31,7 +31,7 @@ class RedisQueue < RedisCall
   
   attr_reader :queue
   
-  def initialize(queue, args = {})
+  def initialize(queue = nil, args = {})
     super(args)
     @queue = queue
   end
