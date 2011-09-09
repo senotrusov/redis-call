@@ -127,6 +127,7 @@ class RedisCall
     end
   end
   
+  
   def rpushex key, ttl, value
     multi do
       rpush key, value
@@ -161,6 +162,12 @@ class RedisCall
   
   def lgetall key
     lrange key,  0, -1
+  end
+  
+  def hgetallarr key
+    result = []
+    Hash[*hgetall(key)].each {|k, v| result[k.to_i] = v}
+    result
   end
   
 end
