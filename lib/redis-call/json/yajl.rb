@@ -1,12 +1,12 @@
 
 #  Copyright 2011 Stanislav Senotrusov <stan@senotrusov.com>
-#
+# 
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
-#
+# 
 #      http://www.apache.org/licenses/LICENSE-2.0
-#
+# 
 #  Unless required by applicable law or agreed to in writing, software
 #  distributed under the License is distributed on an "AS IS" BASIS,
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,14 +14,15 @@
 #  limitations under the License.
 
 
-require 'hiredis'
-
-require 'redis-call/redis_call.rb'
-require 'redis-call/redis_queue.rb'
-
-if Gem.available? 'yajl-ruby'
-  require 'yajl'
-  require 'redis-call/json/yajl.rb'
-  require 'redis-call/redis_json_queue.rb' 
+module RedisCall::JSON
+  def encode element
+    Yajl::Encoder.encode(element)
+  end
+  
+  def decode raw
+    (result = Yajl::Parser.new.parse(raw)).is_a?(Hash) ? result.with_indifferent_access : result
+  end
+  
+  alias :encode_json :encode
+  alias :decode_json :decode
 end
-

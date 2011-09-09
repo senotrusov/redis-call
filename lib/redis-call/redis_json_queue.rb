@@ -14,10 +14,12 @@
 #  limitations under the License.
 
 
-class RedisQueue::JSON < RedisQueue
+class RedisJsonQueue < RedisQueue
   BACKUP_LIMIT = 3
   BACKUP_COUNT_KEY = :redis_queue_backup_retry_count
   
+  include RedisCall::JSON
+
   def push element, queue = @queue
     super(encode(element), queue)
   end
@@ -37,18 +39,6 @@ class RedisQueue::JSON < RedisQueue
     end
   end
   
-  def encode element
-    Yajl::Encoder.encode(element)
-  end
-  
-  def decode raw
-    (result = Yajl::Parser.new.parse(raw)).is_a?(Hash) ? result.with_indifferent_access : result
-  end
-  
-  alias :encode_json :encode
-  alias :decode_json :decode
-  
-
   def restore_backup_element element, queue
     result = decode_json(element)
     
