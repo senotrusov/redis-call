@@ -9,11 +9,21 @@ Gem::Specification.new do |s|
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Stanislav Senotrusov"]
-  s.date = %q{2011-09-08}
+  s.date = %q{2011-09-09}
   s.email = %q{stan@senotrusov.com}
   s.extra_rdoc_files = [
     "LICENSE",
     "README.markdown"
+  ]
+  s.files = [
+    "LICENSE",
+    "README.markdown",
+    "Rakefile",
+    "VERSION",
+    "lib/redis-call.rb",
+    "lib/redis-call/redis_call.rb",
+    "lib/redis-call/redis_queue.rb",
+    "redis-call.gemspec"
   ]
   s.homepage = %q{http://github.com/senotrusov/redis-call}
   s.require_paths = ["lib"]
