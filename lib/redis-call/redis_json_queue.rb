@@ -20,15 +20,15 @@ class RedisJsonQueue < RedisQueue
   
   include RedisCall::JSON
 
-  def push element, queue = @queue
+  def push element, queue = nil
     super(encode(element), queue)
   end
 
-  def pop queue = @queue
+  def pop queue = nil
     decode(super(queue))
   end
   
-  def backup_pop queue = @queue
+  def backup_pop queue = nil
     raw = super(queue)
     
     if block_given?

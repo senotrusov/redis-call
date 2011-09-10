@@ -33,27 +33,33 @@ class RedisQueue < RedisCall
   
   def initialize(queue = nil, args = {})
     super(args)
+    
+    @prefix = key :queue
     @queue = queue
+  end
+  
+  def queue_key queue = nil
+    @prefix / (queue || @queue)
   end
   
   
   # Returns the number of elements inside the queue after the push operation.
-  def push element, queue = @queue
-    lpush("queue." + queue, element)
+  def push element, queue = nil
+    lpush(queue_key(queue), element)
   end
   
-  def error_push element, queue = @queue
-    lpush("queue." + queue + ".error", element)
+  def error_push element, queue = nil
+    lpush(queue_key(queue)/:error, element)
   end
 
   # Returns element
-  def pop queue = @queue
-    brpop("queue." + queue, 0).last
+  def pop queue = nil
+    brpop(queue_key(queue), 0).last
   end
   
   # Returns element
-  def backup_pop queue = @queue
-    element = brpoplpush("queue." + queue, "queue." + queue + ".backup", 0)
+  def backup_pop queue = nil
+    element = brpoplpush(queue_key(queue), queue_key(queue)/:backup, 0)
     
     if block_given?
       yield(element)
@@ -63,18 +69,16 @@ class RedisQueue < RedisCall
     end
   end
   
-  def remove_backup element, queue = @queue
-    queue = "queue." + queue + ".backup"
-    
-    if lrem(queue, -1, element) != 1
-      raise "Not found element #{element.inspect} in queue #{queue}"
+  def remove_backup element, queue = nil
+    if lrem(queue_key(queue)/:backup, -1, element) != 1
+      raise "Not found element #{element.inspect} in queue #{queue_key(queue)/:backup}"
     end
   end
   
-  def restore_backup queue = @queue
-    while element = rpop("queue." + queue + ".backup")
+  def restore_backup queue = nil
+    while element = rpop(queue_key(queue)/:backup)
       if restored = restore_backup_element(element, queue)
-        lpush("queue." + queue, restored)
+        lpush(queue_key(queue), restored)
       end
     end
   end
@@ -83,9 +87,9 @@ class RedisQueue < RedisCall
     element
   end
   
-  def redirect to_queue, queue = @queue
+  def redirect to_queue, queue = nil
 #    http://code.google.com/p/redis/issues/detail?id=593
-#    brpoplpush("queue." + queue, "queue." + to_queue, 0)
+#    brpoplpush(queue_key(queue), queue_key(to_queue), 0)
   end
 end
 
