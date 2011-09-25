@@ -51,26 +51,12 @@ class RedisCall
     result
   end
   
-  DEFAULT_SOCKET = "/tmp/redis.sock"
   DEFAULT_ADDRESS = "127.0.0.1"
-  DEFAULT_PORT = "6379"
+  DEFAULT_PORT = 6379
 
   def initialize(args = {})
     @conn = Hiredis::Connection.new
-    
-    if args[:socket]
-      @conn.connect_unix(args[:socket])
-
-    elsif args[:address] || args[:port]
-      @conn.connect(args[:address] || DEFAULT_ADDRESS, args[:port] || DEFAULT_PORT)
-
-    elsif File.socket?(DEFAULT_SOCKET)
-      @conn.connect_unix(DEFAULT_SOCKET)
-
-    else
-      @conn.connect(DEFAULT_ADDRESS, DEFAULT_PORT)
-    end
-    
+    @conn.connect(args[:address] || DEFAULT_ADDRESS, args[:port] || DEFAULT_PORT)
     
     init(args) if respond_to? :init
   end
