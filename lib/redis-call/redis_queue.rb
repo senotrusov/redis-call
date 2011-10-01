@@ -18,13 +18,13 @@ class RedisQueue < RedisCall
   
   def self.list
     connect do
-      Hash[keys("queue.*").collect {|queue| [key(queue), llen(queue)]}]
+      Hash[keys("queue.*").collect {|queue| [key(queue.gsub(/\Aqueue./, '')), llen(queue)]}]
     end
   end
   
   def self.delete *queues
     connect do
-      del *queues
+      del *(queues.map { |queue| key(:queue)/queue })
     end
   end
   
@@ -90,6 +90,10 @@ class RedisQueue < RedisCall
   def redirect to_queue, queue = nil
 #    http://code.google.com/p/redis/issues/detail?id=593
 #    brpoplpush(queue_key(queue), queue_key(to_queue), 0)
+  end
+  
+  def elements queue = nil
+    lgetall(queue_key(queue))
   end
 end
 

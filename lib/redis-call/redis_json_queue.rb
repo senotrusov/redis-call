@@ -58,6 +58,9 @@ class RedisJsonQueue < RedisQueue
     end
     
   end
-
+  
+  def elements queue = nil
+    super(queue).map {|element| decode element}
+  end
 end
 
