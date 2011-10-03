@@ -66,8 +66,8 @@ class RedisQueue < RedisCall
   end
   
   # NOTE: If executed concurrently, elements from active queue (not backup) are distributed between requests
-  def backup_pop_all_and_backup_elements queue = nil
-    backup = backup_elements(queue)
+  def backup_pop_all_and_elements_from_backup queue = nil
+    backup = elements_from_backup(queue)
     backup_pop_all(queue) + backup
   end
   
@@ -141,7 +141,7 @@ class RedisQueue < RedisCall
     lgetall(queue_key(queue)).map {|raw_element| decode(raw_element)}
   end
 
-  def backup_elements queue = nil
+  def elements_from_backup queue = nil
     lgetall(queue_key(queue)/:backup).map {|raw_element| [decode(raw_element), raw_element]}
   end
 
