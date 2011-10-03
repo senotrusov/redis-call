@@ -45,36 +45,37 @@ class RedisQueue < RedisCall
   
   # Returns the number of elements inside the queue after the push operation.
   def push element, queue = nil
-    lpush(queue_key(queue), element)
+    lpush(queue_key(queue), encode(element))
   end
   
   def error_push element, queue = nil
-    lpush(queue_key(queue)/:error, element)
+    lpush(queue_key(queue)/:error, encode(element))
   end
 
   # Returns element
-  def pop queue = nil
-    brpop(queue_key(queue), 0).last
+  def pop queue = nil # TODO b
+    decode(brpop(queue_key(queue), 0).last)
   end
   
-  # Returns element
-  def backup_pop queue = nil
-    element = brpoplpush(queue_key(queue), queue_key(queue)/:backup, 0)
+  # Returns element, raw_element
+  def backup_pop queue = nil # TODO b
+    element = decode(raw_element = brpoplpush(queue_key(queue), queue_key(queue)/:backup, 0))
     
     if block_given?
       yield(element)
-      remove_backup element, queue
+      remove_backup raw_element, queue
     else
-      return element
+      return element, raw_element
     end
   end
   
-  def remove_backup element, queue = nil
-    if lrem(queue_key(queue)/:backup, -1, element) != 1
-      raise "Not found element #{element.inspect} in queue #{queue_key(queue)/:backup}"
+  def remove_backup raw_element, queue = nil
+    if lrem(queue_key(queue)/:backup, -1, raw_element) != 1
+      raise "Not found raw_element #{raw_element.inspect} in queue #{queue_key(queue)/:backup}"
     end
   end
   
+
   def restore_backup queue = nil
     while element = rpop(queue_key(queue)/:backup)
       if restored = restore_backup_element(element, queue)
@@ -87,13 +88,48 @@ class RedisQueue < RedisCall
     element
   end
   
+  module BackupLimit
+    BACKUP_LIMIT = 3
+    BACKUP_COUNT_KEY = :redis_queue_backup_retry_count
+
+    def restore_backup_element element, queue
+      result = decode_json(element)
+      
+      if result.is_a?(Hash)
+        result[BACKUP_COUNT_KEY] ||= 0
+        result[BACKUP_COUNT_KEY] += 1
+        
+        if result[BACKUP_COUNT_KEY] > BACKUP_LIMIT
+          error_push encode_json(result), queue
+          return nil
+        else
+          return encode_json(result)
+        end
+        
+      else
+        element
+      end
+    end
+  end
+
+  
   def redirect to_queue, queue = nil
 #    http://code.google.com/p/redis/issues/detail?id=593
 #    brpoplpush(queue_key(queue), queue_key(to_queue), 0)
   end
   
   def elements queue = nil
-    lgetall(queue_key(queue))
+    lgetall(queue_key(queue)).map {|raw_element| decode(raw_element)}
   end
+
+
+  def encode element
+    element
+  end
+  
+  def decode raw
+    raw
+  end
+
 end
 

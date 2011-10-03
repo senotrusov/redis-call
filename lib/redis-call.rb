@@ -22,6 +22,5 @@ require 'redis-call/redis_queue.rb'
 if Gem.available? 'yajl-ruby'
   require 'yajl'
   require 'redis-call/json/yajl.rb'
-  require 'redis-call/redis_json_queue.rb' 
 end
 
