@@ -65,7 +65,7 @@ class RedisQueue < RedisCall
     result.reverse
   end
   
-  # NOTE: It executed concurrently, elements from active queue (not backup) are distributed between requests
+  # NOTE: If executed concurrently, elements from active queue (not backup) are distributed between requests
   def backup_pop_all_and_backup_elements queue = nil
     backup = backup_elements(queue)
     backup_pop_all(queue) + backup
