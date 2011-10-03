@@ -56,6 +56,20 @@ class RedisQueue < RedisCall
   def pop queue = nil
     decode(rpop(queue_key(queue)))
   end
+
+  def backup_pop_all queue = nil
+    result = []
+      while raw_element = rpoplpush(queue_key(queue), queue_key(queue)/:backup)
+        result.push [decode(raw_element), raw_element]
+      end
+    result.reverse
+  end
+  
+  # NOTE: It executed concurrently, elements from active queue (not backup) are distributed between requests
+  def backup_pop_all_and_backup_elements queue = nil
+    backup = backup_elements(queue)
+    backup_pop_all(queue) + backup
+  end
   
   # Returns element
   def blocking_pop queue = nil
@@ -127,6 +141,9 @@ class RedisQueue < RedisCall
     lgetall(queue_key(queue)).map {|raw_element| decode(raw_element)}
   end
 
+  def backup_elements queue = nil
+    lgetall(queue_key(queue)/:backup).map {|raw_element| [decode(raw_element), raw_element]}
+  end
 
   def encode element
     element
