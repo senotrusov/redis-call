@@ -53,12 +53,17 @@ class RedisQueue < RedisCall
   end
 
   # Returns element
-  def bpop queue = nil
+  def pop queue = nil
+    decode(rpop(queue_key(queue)))
+  end
+  
+  # Returns element
+  def blocking_pop queue = nil
     decode(brpop(queue_key(queue), 0).last)
   end
   
   # Returns element, raw_element
-  def backup_bpop queue = nil
+  def backup_blocking_pop queue = nil
     element = decode(raw_element = brpoplpush(queue_key(queue), queue_key(queue)/:backup, 0))
     
     if block_given?
