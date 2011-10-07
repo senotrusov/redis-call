@@ -14,104 +14,150 @@
 #  limitations under the License.
 
 
-class RedisQueue < RedisCall
+module RedisQueue
+  class BackupElementNotFound < StandardError; end
   
-  def self.list
-    connect do
-      Hash[keys("queue.*").collect {|queue| [key(queue.gsub(/\Aqueue./, '')), llen(queue)]}]
-    end
-  end
-  
-  def self.delete *queues
-    connect do
-      del *(queues.map { |queue| key(:queue)/queue })
-    end
-  end
-  
-  
-  attr_reader :queue
-  
-  def initialize(queue = nil, args = {})
-    super(args)
-    
-    @prefix = key :queue
-    @queue = queue
-  end
-  
-  def queue_key queue = nil
-    @prefix / (queue || @queue)
-  end
-  
-  
-  # Returns the number of elements inside the queue after the push operation.
-  def push element, queue = nil
-    lpush(queue_key(queue), encode(element))
-  end
-  
-  def error_push element, queue = nil
-    lpush(queue_key(queue)/:error, encode(element))
-  end
-
-  # Returns element
-  def pop queue = nil
-    decode(rpop(queue_key(queue)))
-  end
-
-  def backup_pop_all queue = nil
-    result = []
-      while raw_element = rpoplpush(queue_key(queue), queue_key(queue)/:backup)
-        result.push [decode(raw_element), raw_element]
-      end
-    result.reverse
-  end
-  
-  # NOTE: If executed concurrently, elements from active queue (not backup) are distributed between requests
-  def backup_pop_all_and_elements_from_backup queue = nil
-    backup = elements_from_backup(queue)
-    backup_pop_all(queue) + backup
-  end
-  
-  # Returns element
-  def blocking_pop queue = nil
-    decode(brpop(queue_key(queue), 0).last)
-  end
-  
-  # Returns element, raw_element
-  def backup_blocking_pop queue = nil
-    element = decode(raw_element = brpoplpush(queue_key(queue), queue_key(queue)/:backup, 0))
-    
-    if block_given?
-      yield(element)
-      remove_backup raw_element, queue
-    else
-      return element, raw_element
-    end
-  end
-  
-  def remove_backup raw_element, queue = nil
-    if lrem(queue_key(queue)/:backup, -1, raw_element) != 1
-      raise "Not found raw_element #{raw_element.inspect} in queue #{queue_key(queue)/:backup}"
-    end
-  end
-  
-
-  def restore_backup queue = nil
-    while element = rpop(queue_key(queue)/:backup)
-      if restored = restore_backup_element(element, queue)
-        lpush(queue_key(queue), restored)
+  class Simple < RedisCall
+    def self.list
+      connect do
+        Hash[keys("queue.*").collect {|queue| [key(queue.gsub(/\Aqueue./, '')), llen(queue)]}]
       end
     end
+    
+    def self.delete *queues
+      connect do
+        del *(queues.map { |queue| key(:queue)/queue })
+      end
+    end
+    
+    
+    attr_reader :queue
+    
+    def initialize(queue = nil, args = {})
+      super(args)
+      
+      @prefix = key :queue
+      @queue = queue
+    end
+    
+    def queue_key queue = nil
+      @prefix / (queue || @queue)
+    end
+    
+    def encode element
+      element
+    end
+    
+    def decode element
+      element
+    end
+    
+    
+    # Returns the number of elements inside the queue after the push operation.
+    def push element, queue = nil
+      lpush(queue_key(queue), encode(element))
+    end
+    
+    def error_push element, queue = nil
+      lpush(queue_key(queue)/:error, encode(element))
+    end
+
+    def error_push_raw element, queue = nil
+      lpush(queue_key(queue)/:error, element)
+    end
+    
+    
+    # Returns element
+    def pop queue = nil
+      if element = rpop(queue_key(queue))
+        decode(element)
+      end
+    end
+
+    # Returns element
+    def blocking_pop timeout = 0, queue = nil
+      if result = brpop(queue_key(queue), timeout)
+        decode(result.last)
+      end
+    end
+    
+    def backed_up_pop queue = nil
+      if element = rpoplpush(queue_key(queue), queue_key(queue)/:backup)
+        decode(element)
+      end
+    end
+    
+    # Returns element
+    def backed_up_blocking_pop timeout = 0, queue = nil
+      if raw_element = brpoplpush(queue_key(queue), queue_key(queue)/:backup, timeout)
+        element = decode(raw_element)
+        
+        if block_given?
+          yield(element)
+          remove_raw_backup_element raw_element, queue
+        else
+          return element
+        end
+      end
+    end
+    
+    def remove_raw_backup_element element, queue = nil
+      if lrem(queue_key(queue)/:backup, -1, element) != 1
+        raise(RedisQueue::BackupElementNotFound, "Not found element #{element.inspect} in backup queue #{queue_key(queue)/:backup}")
+      end
+    end
+    
+    
+    def backed_up_pop_all queue = nil
+      result = []
+      # We does not call backed_up_pop here, because of the edge case, when element is a string "null" which JSON-decoded as nil
+      while element = rpoplpush(queue_key(queue), queue_key(queue)/:backup)
+        result.push decode(element)
+      end
+      result.reverse
+    end
+    
+    # NOTE: If executed concurrently, elements from active queue (not backup) are distributed between requests
+    def backed_up_pop_all_and_backup_elements queue = nil
+      backup = backup_elements(queue)
+      backed_up_pop_all(queue) + backup
+    end
+    
+
+    def elements queue = nil
+      lgetall(queue_key(queue)).map {|element| decode(element)}
+    end
+
+    def backup_elements queue = nil
+      lgetall(queue_key(queue)/:backup).map {|element| decode(element)}
+    end
+    
+
+    # http://code.google.com/p/redis/issues/detail?id=593
+    def blocking_redirect to_queue, queue = nil
+      brpoplpush(queue_key(queue), queue_key(to_queue), 0)
+    end
+
+    
+    def restore_backup queue = nil
+      while element = rpop(queue_key(queue)/:backup)
+        if element = filter_backup_element(element, queue)
+          lpush(queue_key(queue), element)
+        end
+      end
+    end
+    
+    def filter_backup_element element, queue
+      element
+    end
   end
   
-  def restore_backup_element element, queue
-    element
-  end
-  
-  module BackupLimit
+
+  module RestoreBackupLimit
     BACKUP_LIMIT = 3
     BACKUP_COUNT_KEY = :redis_queue_backup_retry_count
 
-    def restore_backup_element element, queue
+    def filter_backup_element element, queue
       result = decode_json(element)
       
       if result.is_a?(Hash)
@@ -119,7 +165,7 @@ class RedisQueue < RedisCall
         result[BACKUP_COUNT_KEY] += 1
         
         if result[BACKUP_COUNT_KEY] > BACKUP_LIMIT
-          error_push encode_json(result), queue
+          error_push_raw encode_json(result), queue
           return nil
         else
           return encode_json(result)
@@ -131,26 +177,22 @@ class RedisQueue < RedisCall
     end
   end
 
-  
-  def redirect to_queue, queue = nil
-#    http://code.google.com/p/redis/issues/detail?id=593
-#    brpoplpush(queue_key(queue), queue_key(to_queue), 0)
-  end
-  
-  def elements queue = nil
-    lgetall(queue_key(queue)).map {|raw_element| decode(raw_element)}
-  end
+  class Base < Simple
+    include RedisCall::JSON
+    include RedisCall::KeepSerializedElement
+    
+    include RedisQueue::RestoreBackupLimit
+    
+    extend ActiveModel::Naming
+    include ActiveModel::Conversion
 
-  def elements_from_backup queue = nil
-    lgetall(queue_key(queue)/:backup).map {|raw_element| [decode(raw_element), raw_element]}
-  end
-
-  def encode element
-    element
-  end
-  
-  def decode raw
-    raw
+    def persisted?
+      true
+    end
+    
+    def id
+      @queue
+    end
   end
 
 end

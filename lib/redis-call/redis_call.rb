@@ -156,5 +156,35 @@ class RedisCall
     result
   end
   
+  
+  module JSON
+    def encode element
+      Yajl::Encoder.encode(element)
+    end
+    
+    def decode raw
+      (result = Yajl::Parser.new.parse(raw)).is_a?(Hash) ? result.with_indifferent_access : result
+    end
+    
+    alias :encode_json :encode
+    alias :decode_json :decode
+  end
+
+  module KeepSerializedElement
+    def encode element
+      if element.is_a?(Hash)
+        element = element.dup
+        element.delete :serialized
+      end
+      super(element)
+    end
+    
+    def decode raw
+      result = super(raw)
+      result[:serialized] = raw if result.is_a?(Hash)
+      result
+    end
+  end
+
 end
 

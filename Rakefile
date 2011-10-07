@@ -25,6 +25,7 @@ begin
     gemspec.authors = ["Stanislav Senotrusov"]
     
     gemspec.add_dependency 'hiredis'
+    gemspec.add_dependency 'yajl-ruby'
   end
   
   Jeweler::GemcutterTasks.new

@@ -15,12 +15,8 @@
 
 
 require 'hiredis'
+require 'yajl'
 
 require 'redis-call/redis_call.rb'
 require 'redis-call/redis_queue.rb'
-
-if Gem.available? 'yajl-ruby'
-  require 'yajl'
-  require 'redis-call/json/yajl.rb'
-end
 
