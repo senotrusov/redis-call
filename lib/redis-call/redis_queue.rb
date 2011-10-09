@@ -39,18 +39,18 @@ module RedisQueue
     end
     
     
-    attr_reader :queue, :config
+    attr_reader :name, :config
     
-    def initialize(queue = nil, args = {})
+    def initialize(name = nil, args = {})
       super(args)
       
       @prefix = key :queue
-      @queue = queue
-      @config = RedisQueue.config[queue]
+      @name = name
+      @config = RedisQueue.config[name] || {}
     end
     
     def queue_key queue = nil
-      @prefix / (queue || @queue)
+      @prefix / (queue || @name)
     end
     
     def encode element
@@ -210,7 +210,7 @@ module RedisQueue
     end
     
     def id
-      @queue
+      @name
     end
     
     def action name
