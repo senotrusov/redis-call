@@ -28,23 +28,26 @@ module RedisQueue
   end
   
   class Simple < RedisCall
-    def self.all
-      (query{keys("queue.*")}.collect {|name| name.gsub(/\Aqueue\./, '')} | RedisQueue.config.keys).sort.collect {|name| new(name)}
-    end
+    class << self 
+      alias_method :find, :new
     
-    def self.delete *queues
-      query do
-        del *(queues.map { |queue| key(:queue)/queue })
+      def all
+        (query{keys("queue.*")}.collect {|name| name.gsub(/\Aqueue\./, '')} | RedisQueue.config.keys).sort.collect {|name| new(name)}
+      end
+      
+      def delete *names
+        query do
+          del *(names.map{|name| key(:queue)/name})
+        end
       end
     end
-    
     
     attr_reader :name, :config
     
     def initialize(name = nil, args = {})
       super(args)
       
-      @name = name
+      @name = key(name)
       @key = key(:queue)/name
       @config = RedisQueue.config[name] || {}
     end

@@ -180,8 +180,8 @@ class RedisCall
       (result = Yajl::Parser.new.parse(raw)).is_a?(Hash) ? result.with_indifferent_access : result
     end
     
-    alias :encode_json :encode
-    alias :decode_json :decode
+    alias_method :encode_json, :encode
+    alias_method :decode_json, :decode
   end
 
   module KeepSerializedElement
