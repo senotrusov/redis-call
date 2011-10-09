@@ -19,4 +19,5 @@ require 'yajl'
 
 require 'redis-call/redis_call.rb'
 require 'redis-call/redis_queue.rb'
+require 'redis-call/railtie.rb' if defined?(Rails)
 

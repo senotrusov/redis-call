@@ -15,9 +15,7 @@
 
 
 class RedisCall
-  
   class UnexpectedResult < StandardError; end
-  
   
   class Key
     def initialize name
@@ -43,29 +41,35 @@ class RedisCall
     RedisCall::Key.new name
   end
   
+  @@config = {}
   
-  def self.connect(*args, &block)
-    conn = self.new(*args)
-    result = conn.instance_exec(&block)
-    conn.disconnect
+  def self.config= conf
+    @@config = conf
+  end
+  
+  def self.query(*args, &block)
+    instance = self.new(*args)
+    result = instance.instance_exec(&block)
+    instance.disconnect
     result
   end
   
-  DEFAULT_ADDRESS = "127.0.0.1"
+  DEFAULT_HOST = "127.0.0.1"
   DEFAULT_PORT = 6379
 
   def initialize(args = {})
-    @conn = Hiredis::Connection.new
-    @conn.connect(args[:address] || DEFAULT_ADDRESS, args[:port] || DEFAULT_PORT)
-    
-    init(args) if respond_to? :init
+    if args[:connect]
+      @connection = new_connection(args[:host] || @@config[:host] || DEFAULT_HOST, args[:port] || @@config[:port] || DEFAULT_PORT)
+    end
   end
   
   def disconnect(thread = nil, limit = 10)
-    begin
-      @conn.disconnect
-    rescue RuntimeError => exception
-      raise(exception) if exception.message != "not connected"
+    if @connection
+      begin
+        @connection.disconnect
+      rescue RuntimeError => exception
+        raise(exception) if exception.message != "not connected"
+      end
     end
     
     if thread
@@ -78,10 +82,20 @@ class RedisCall
     end
   end
   
+  def thread_local_connection
+    Thread.current[:redis_call_connection] ||= new_connection(@@config["host"] || DEFAULT_HOST, @@config["port"] || DEFAULT_PORT)
+  end
+  
+  def new_connection host, port
+    connection = Hiredis::Connection.new
+    connection.connect(host, port)
+    connection
+  end
 
   def call *args
-    @conn.write(args)
-    result = @conn.read
+    connection = @connection || thread_local_connection
+    connection.write(args)
+    result = connection.read
     raise result if result.is_a?(Exception)
     result
   rescue RuntimeError => exception

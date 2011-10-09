@@ -16,28 +16,39 @@
 
 module RedisQueue
   class BackupElementNotFound < StandardError; end
+    
+  @config = {}
+  
+  def self.config= conf
+    @config = conf
+  end
+  
+  def self.config
+    @config
+  end
   
   class Simple < RedisCall
     def self.list
-      connect do
+      query do
         Hash[keys("queue.*").collect {|queue| [key(queue.gsub(/\Aqueue./, '')), llen(queue)]}]
       end
     end
     
     def self.delete *queues
-      connect do
+      query do
         del *(queues.map { |queue| key(:queue)/queue })
       end
     end
     
     
-    attr_reader :queue
+    attr_reader :queue, :config
     
     def initialize(queue = nil, args = {})
       super(args)
       
       @prefix = key :queue
       @queue = queue
+      @config = RedisQueue.config[queue]
     end
     
     def queue_key queue = nil
@@ -192,6 +203,10 @@ module RedisQueue
     
     def id
       @queue
+    end
+    
+    def action name
+      @config[:actions].find {|item| item[:action] = name.to_s}
     end
   end
 
