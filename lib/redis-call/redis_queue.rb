@@ -28,10 +28,8 @@ module RedisQueue
   end
   
   class Simple < RedisCall
-    def self.list
-      query do
-        Hash[keys("queue.*").collect {|queue| [key(queue.gsub(/\Aqueue./, '')), llen(queue)]}]
-      end
+    def self.all
+      (query{keys("queue.*")}.collect {|name| name.gsub(/\Aqueue\./, '')} | RedisQueue.config.keys).sort.collect {|name| new(name)}
     end
     
     def self.delete *queues
@@ -161,6 +159,16 @@ module RedisQueue
     def filter_backup_element element, queue
       element
     end
+    
+    def length queue = nil
+      llen(queue_key(queue))
+    end
+    
+    def delete queue = nil
+      del(queue_key(queue))
+    end
+    
+    alias_method :destroy, :delete
   end
   
 
