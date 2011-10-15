@@ -122,22 +122,16 @@ module RedisQueue
       while element = rpoplpush(@key, @key/:backup)
         result.push decode(element)
       end
-      result.reverse
-    end
-    
-    # NOTE: If executed concurrently, elements from active queue (not backup) are distributed between requests
-    def backed_up_pop_all_and_backup_elements
-      backup = backup_elements
-      backed_up_pop_all + backup
+      result
     end
     
 
     def elements
-      lgetall(@key).map {|element| decode(element)}
+      lgetall(@key).map {|element| decode(element)}.reverse
     end
 
     def backup_elements
-      lgetall(@key/:backup).map {|element| decode(element)}
+      lgetall(@key/:backup).map {|element| decode(element)}.reverse
     end
     
 
