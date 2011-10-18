@@ -16,6 +16,7 @@
 
 class RedisCall
   class UnexpectedResult < StandardError; end
+  class TransactionAborted < StandardError; end
   
   class Key
     def initialize name
@@ -41,36 +42,140 @@ class RedisCall
     RedisCall::Key.new name
   end
   
+  
+  class Connection
+    def initialize(host, port)
+      @connection = Hiredis::Connection.new
+      @connection.connect(host, port)
+      
+      @multi_depth = 0
+    end
+    
+    def connected?
+      @connection.connected?
+    end
+    
+    def disconnect
+      @connection.disconnect
+    end
+    
+    
+    def call *args
+      # puts args.inspect
+      
+               @connection.write(args)
+      result = @connection.read
+      
+      @call_index += 1 if @call_index
+
+      raise result if result.is_a?(Exception)
+      
+      result
+      
+    rescue RuntimeError => exception
+      if exception.message == "not connected"
+        raise(IOError, "Not connected")
+      else
+        raise(exception)
+      end
+    end
+    
+    
+    def queued result, &block
+      if @queued_handlers
+        (@queued_handlers[@call_index] ||= []).push block
+      else
+        yield(result)
+      end
+    end
+    
+    def exec
+      if (@multi_depth -= 1) == 0
+        begin
+          unless result = call(:EXEC)
+            raise RedisCall::TransactionAborted
+          end
+
+          @queued_handlers.each do |index, handlers|
+            result[index] = handlers.inject(result[index]) {|data, handler| handler.call(data)}
+          end
+          
+          (result.length == 1) ? result.first : result
+          
+        ensure
+          @call_index = @queued_handlers = nil
+        end
+      end
+    end
+    
+    
+    def discard
+      if (@multi_depth -= 1) == 0
+        begin
+          call(:DISCARD) if @connection.connected?
+        ensure
+          @call_index = @queued_handlers = nil
+        end
+      end
+    end
+    
+    
+    def multi
+      call(:MULTI) if (@multi_depth += 1) == 1
+      
+      @call_index = -1
+      @queued_handlers = {}
+      
+      if block_given?
+        begin
+          yield
+        rescue ScriptError, StandardError => exception
+          begin
+            discard
+          rescue ScriptError, StandardError => discard_exception
+            # It is not important to report this error
+            discard_exception.report! if discard_exception.respond_to? :report!
+          ensure
+            raise exception
+          end
+        end
+        exec
+      end # if block_given?
+    end # def multi
+
+  end
+  
+  
   @@config = {}
   
   def self.config= conf
     @@config = conf
   end
   
-  def self.query(*args, &block)
-    instance = self.new(*args)
-    result = instance.instance_exec(&block)
-    instance.disconnect
-    result
-  end
-  
   DEFAULT_HOST = "127.0.0.1"
   DEFAULT_PORT = 6379
 
   def initialize(args = {})
-    if args[:connect]
-      @connection = new_connection(args[:host] || @@config[:host] || DEFAULT_HOST, args[:port] || @@config[:port] || DEFAULT_PORT)
-    end
+    host = args[:host] || @@config[:host] || DEFAULT_HOST
+    port = args[:port] || @@config[:port] || DEFAULT_PORT
+    
+    @connection =
+      if args[:connect]
+        Connection.new(host, port)
+      else
+        @pool_key = "redis_#{host}:#{port}".to_sym
+        (conn = Thread.current[@pool_key]) && conn.connected? && conn || (Thread.current[@pool_key] = Connection.new(host, port))
+      end
   end
   
   def disconnect(thread = nil, limit = 10)
-    if @connection
-      begin
-        @connection.disconnect
-      rescue RuntimeError => exception
-        raise(exception) if exception.message != "not connected"
-      end
+    begin
+      @connection.disconnect
+    rescue RuntimeError => exception
+      raise(exception) if exception.message != "not connected"
     end
+      
+    Thread.current[@pool_key] = nil if @pool_key
     
     if thread
       begin
@@ -82,47 +187,38 @@ class RedisCall
     end
   end
   
-  def thread_local_connection
-    Thread.current[:redis_call_connection] ||= new_connection(@@config["host"] || DEFAULT_HOST, @@config["port"] || DEFAULT_PORT)
+  
+  def call *args, &block
+    @connection.call *args, &block
   end
   
-  def new_connection host, port
-    connection = Hiredis::Connection.new
-    connection.connect(host, port)
-    connection
-  end
-
-  def call *args
-    connection = @connection || thread_local_connection
-    connection.write(args)
-    result = connection.read
-    raise result if result.is_a?(Exception)
-    result
-  rescue RuntimeError => exception
-    if exception.message == "not connected"
-      raise(IOError, "Not connected")
-    else
-      raise(exception)
-    end
+  alias_method :method_missing, :call
+  
+  
+  def multi &block
+    @connection.multi &block
   end
   
-  def method_missing *args
-    call *args
+  def discard
+    @connection.discard
+  end
+  
+  def exec
+    @connection.exec
+  end
+  
+  def queued result, &block
+    @connection.queued result, &block
   end
   
   
-  def multi(watch = [])
-    call :MULTI
-    call(:WATCH, *watch) unless watch.empty?
+  def insist(retries = 42, *exceptions)
+    exceptions.push RedisCall::TransactionAborted
     yield
-    call :EXEC
-    
-  rescue ScriptError, StandardError => exception
-    begin
-      call :DISCARD
-    rescue ScriptError, StandardError => discard_exception
-      discard_exception.report! if discard_exception.respond_to? :report!
-    ensure
+  rescue *exceptions => exception
+    if (retries -= 1) > 0
+      retry
+    else
       raise exception
     end
   end
@@ -135,29 +231,31 @@ class RedisCall
     end
   end
   
+  # TODO
   def decrzerodel key
-    if value = decr(key) <= 0
+    if (value = decr(key)) <= 0
       del(key) # If exception somehow happens here the key will stay in storage
     end
     value
   end
   
   def llen key
-    call(:LLEN, key).to_i
+    queued(call :LLEN, key) {|result| result.to_i}
   end
   
   def getnnil key
-    value = get key
-    raise(RedisCall::UnexpectedResult, "Key #{key.inspect} expected to be not nil") if value == nil
-    value
+    queued(get key) do |result|
+      raise(RedisCall::UnexpectedResult, "Key #{key.inspect} expected to be not nil") if result == nil
+      result
+    end
   end
   
   def getnnili key
-    getnnil(key).to_i
+    queued(getnnil key) {|result| result.to_i}
   end
   
   def geti key
-    get(key).to_i
+    queued(get key) {|result| result.to_i}
   end
   
   def lgetall key
@@ -165,9 +263,11 @@ class RedisCall
   end
   
   def hgetallarr key
-    result = []
-    Hash[*hgetall(key)].each {|k, v| result[k.to_i] = v}
-    result
+    queued(hgetall key) do |raw|
+      result = []
+      Hash[*raw].each {|k, v| result[k.to_i] = v}
+      result
+    end
   end
   
   
