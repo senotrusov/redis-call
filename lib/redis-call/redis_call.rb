@@ -231,12 +231,14 @@ class RedisCall
     end
   end
   
-  # TODO
-  def decrzerodel key
-    if (value = decr(key)) <= 0
-      del(key) # If exception somehow happens here the key will stay in storage
+  def decrzerodelex key, ttl
+    multi do
+      queued(decr key) do |result|
+        del(key) if result <= 0
+        result
+      end
+      expire key, ttl
     end
-    value
   end
   
   def llen key
