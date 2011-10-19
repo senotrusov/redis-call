@@ -32,7 +32,12 @@ module RedisQueue
       alias_method :find, :new
     
       def all
-        (query{keys("queue.*")}.collect {|name| name.gsub(/\Aqueue\./, '')} | RedisQueue.config.keys).sort.collect {|name| new(name)}
+        klass = self
+        query do
+          queued(keys "queue.*") do |result|
+            (result.collect {|name| name.gsub /\Aqueue\./, ''} | RedisQueue.config.keys).sort.collect {|name| klass.new name}
+          end
+        end
       end
       
       def delete *names
@@ -77,9 +82,7 @@ module RedisQueue
     
     # Returns element
     def pop
-      if element = rpop(@key)
-        decode(element)
-      end
+      queued(rpop @key) {|result| decode(result) if result}
     end
 
     # Returns element
@@ -90,9 +93,7 @@ module RedisQueue
     end
     
     def backed_up_pop
-      if element = rpoplpush(@key, @key/:backup)
-        decode(element)
-      end
+      queued(rpoplpush(@key, @key/:backup)) {|result| decode(result) if result}
     end
     
     # Returns element
@@ -110,13 +111,14 @@ module RedisQueue
     end
     
     def remove_raw_backup_element element
-      if lrem(@key/:backup, -1, element) != 1
-        raise(RedisQueue::BackupElementNotFound, "Not found element #{element.inspect} in backup queue #{@key/:backup}")
+      queued(lrem(@key/:backup, -1, element)) do |result|
+        raise(RedisQueue::BackupElementNotFound, "Not found element #{element.inspect} in backup queue #{@key/:backup}") if result != 1
       end
     end
     
     
     def backed_up_pop_all
+      raise(NonTransactionalMethod) if inside_transaction?
       result = []
       # We does not call backed_up_pop here, because of the edge case, when element is a string "null" which JSON-decoded as nil
       while element = rpoplpush(@key, @key/:backup)
@@ -127,22 +129,36 @@ module RedisQueue
     
 
     def elements
-      lgetall(@key).map {|element| decode(element)}.reverse
+      queued(lgetall(@key)) {|result| result.map {|element| decode(element)}.reverse }
     end
 
     def backup_elements
-      lgetall(@key/:backup).map {|element| decode(element)}.reverse
+      queued(lgetall(@key/:backup)) {|result| result.map {|element| decode(element)}.reverse }
     end
     
-
-    # NOTE: http://code.google.com/p/redis/issues/detail?id=593
-    # TODO: to_queue may be kind_if? Key, Queue, String
-#    def blocking_redirect to_queue
-#      brpoplpush(@key, to_queue, 0)
-#    end
-
+    def raw_backup_elements
+      queued(lgetall(@key/:backup)) {|result| result.reverse }
+    end
     
+    
+    def watch *keys
+      keys.empty? ? super(@key) : super(*keys)
+    end
+    
+    def watch_backup
+      watch @key/:backup
+    end
+
+    # NOTE: Make sure your redis is 2.2.13 or higher to use this method
+    #   https://github.com/antirez/redis/commit/c47d152c8d96415de1af994b1a4bb3e0347caef3
+    #   http://code.google.com/p/redis/issues/detail?id=593
+    def blocking_redirect to, timeout = 0
+      brpoplpush(@key, key(:queue)/(to.kind_of?(RedisQueue::Simple) ? to.name : to), timeout)
+    end
+
     def restore_backup
+      raise(NonTransactionalMethod) if inside_transaction?
+      
       while element = rpop(@key/:backup)
         if element = filter_backup_element(element)
           lpush(@key, element)
@@ -208,7 +224,11 @@ module RedisQueue
     end
     
     def action name
-      @config[:actions].find {|item| item[:action] = name.to_s}
+      @config[:actions].find {|action| action[:name] = name.to_s}
+    end
+    
+    def requested_action params
+      @config[:actions].find {|action| params[action[:name]]}
     end
   end
 

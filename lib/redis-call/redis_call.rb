@@ -17,6 +17,7 @@
 class RedisCall
   class UnexpectedResult < StandardError; end
   class TransactionAborted < StandardError; end
+  class NonTransactionalMethod < StandardError; end
   
   class Key
     def initialize name
@@ -57,6 +58,10 @@ class RedisCall
     
     def disconnect
       @connection.disconnect
+    end
+    
+    def inside_transaction?
+      @multi_depth == 0
     end
     
     
@@ -145,6 +150,10 @@ class RedisCall
 
   end
   
+  def self.query(*args, &block)
+    self.new(*args).instance_exec(&block)
+  end
+  
   
   @@config = {}
   
@@ -209,6 +218,10 @@ class RedisCall
   
   def queued result, &block
     @connection.queued result, &block
+  end
+  
+  def inside_transaction?
+    @connection.inside_transaction?
   end
   
   
