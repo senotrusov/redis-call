@@ -34,9 +34,11 @@ class RedisCall
       @name.inspect
     end
     
-    def to_s
+    def to_str
       @name
     end
+    
+    alias_method :to_s, :to_str
   end
   
   def key name
