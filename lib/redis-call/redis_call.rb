@@ -140,8 +140,8 @@ class RedisCall
           end
         end
         exec
-      end # if block_given?
-    end # def multi
+      end
+    end
 
   end
   
