@@ -61,7 +61,7 @@ class RedisCall
     end
     
     def inside_transaction?
-      @multi_depth == 0
+      @multi_depth != 0
     end
     
     
