@@ -47,14 +47,20 @@ module RedisQueue
       end
     end
     
-    attr_reader :name, :config
+    attr_reader :name
+    attr_accessor :config
     
     def initialize(name = nil, args = {})
       super(args)
       
+      self.name = name
+
+      @config = args[:config] || RedisQueue.config[name] || {}
+    end
+    
+    def name= name
       @name = key(name)
       @key = key(:queue)/name
-      @config = RedisQueue.config[name] || {}
     end
     
     def encode element
@@ -125,6 +131,13 @@ module RedisQueue
         result.push decode(element)
       end
       result
+    end
+    
+    def pop_all
+      multi do
+        queued(lgetall(@key)) {|result| result.map {|element| decode(element)}.reverse }
+        queued(del @key)
+      end
     end
     
 
@@ -224,11 +237,11 @@ module RedisQueue
     end
     
     def action name
-      @config[:actions].find {|action| action[:name] = name.to_s}
+      @config[:actions] && @config[:actions].find {|action| action[:name] = name.to_s}
     end
     
     def requested_action params
-      @config[:actions].find {|action| params[action[:name]]}
+      @config[:actions] && @config[:actions].find {|action| params[action[:name]]}
     end
   end
 

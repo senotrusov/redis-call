@@ -39,6 +39,10 @@ class RedisCall
     end
     
     alias_method :to_s, :to_str
+    
+    def method_missing *args, &block
+      @name.__send__ *args, &block
+    end
   end
   
   def key name
@@ -102,10 +106,21 @@ class RedisCall
           unless result = call(:EXEC)
             raise RedisCall::TransactionAborted
           end
+          
+          drop_results = []
 
           @queued_handlers.each do |index, handlers|
-            result[index] = handlers.inject(result[index]) {|data, handler| handler.call(data)}
+            result[index] = handlers.inject(result[index]) do |data, handler|
+              if handler
+                handler.call(data)
+              else
+                drop_results.push index
+                data
+              end
+            end
           end
+          
+          drop_results.each {|index| result.delete_at index }
           
           (result.length == 1) ? result.first : result
           
