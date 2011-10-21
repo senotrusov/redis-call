@@ -53,15 +53,12 @@ module RedisQueue
     def initialize(name = nil, args = {})
       super(args)
       
-      self.name = name
+      @name = key(name)
+      @key = key(:queue)/name
 
       @config = args[:config] || RedisQueue.config[name] || {}
     end
     
-    def name= name
-      @name = key(name)
-      @key = key(:queue)/name
-    end
     
     def encode element
       element

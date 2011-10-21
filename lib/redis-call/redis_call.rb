@@ -70,10 +70,8 @@ class RedisCall
       @multi_depth != 0
     end
     
-    
+
     def call *args
-      # puts args.inspect
-      
                @connection.write(args)
       result = @connection.read
       
@@ -91,10 +89,12 @@ class RedisCall
       end
     end
     
+    alias_method :method_missing, :call 
     
+
     def queued result, &block
       if @queued_handlers
-        (@queued_handlers[@call_index] ||= []).push block
+        (@queued_handlers[@call_index] ||= []).push(block)
       else
         yield(result)
       end
@@ -167,6 +167,7 @@ class RedisCall
 
   end
   
+  
   def self.query(*args, &block)
     self.new(*args).instance_exec(&block)
   end
@@ -182,21 +183,23 @@ class RedisCall
   DEFAULT_PORT = 6379
 
   def initialize(args = {})
-    host = args[:host] || @@config[:host] || DEFAULT_HOST
-    port = args[:port] || @@config[:port] || DEFAULT_PORT
+    @host = args[:host] || @@config[:host] || DEFAULT_HOST
+    @port = args[:port] || @@config[:port] || DEFAULT_PORT
     
-    @connection =
-      if args[:connect]
-        Connection.new(host, port)
-      else
-        @pool_key = "redis_#{host}:#{port}".to_sym
-        (conn = Thread.current[@pool_key]) && conn.connected? && conn || (Thread.current[@pool_key] = Connection.new(host, port))
-      end
+    if args[:connect]
+      @connection = Connection.new(@host, @port)
+    else
+      @pool_key = "redis_#{@host}:#{@port}".to_sym
+    end
+  end
+  
+  def connection
+    @connection || (Thread.current[@pool_key] ||= Connection.new(@host, @port))
   end
   
   def disconnect(thread = nil, limit = 10)
     begin
-      @connection.disconnect
+      connection.disconnect
     rescue RuntimeError => exception
       raise(exception) if exception.message != "not connected"
     end
@@ -212,36 +215,11 @@ class RedisCall
       thread.join(limit)
     end
   end
-  
-  
-  def call *args, &block
-    @connection.call *args, &block
+
+  def method_missing *args, &block
+    connection.__send__ *args, &block
   end
-  
-  alias_method :method_missing, :call
-  
-  
-  def multi &block
-    @connection.multi &block
-  end
-  
-  def discard
-    @connection.discard
-  end
-  
-  def exec
-    @connection.exec
-  end
-  
-  def queued result, &block
-    @connection.queued result, &block
-  end
-  
-  def inside_transaction?
-    @connection.inside_transaction?
-  end
-  
-  
+
   def insist(retries = 42, *exceptions)
     exceptions.push RedisCall::TransactionAborted
     yield
