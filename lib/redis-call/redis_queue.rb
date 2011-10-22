@@ -47,8 +47,7 @@ module RedisQueue
       end
     end
     
-    attr_reader :name
-    attr_accessor :config
+    attr_reader :name, :config
     
     def initialize(name = nil, args = {})
       super(args)
