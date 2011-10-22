@@ -234,8 +234,8 @@ class RedisCall
   
   def rpushex key, ttl, value
     multi do
-      rpush key, value
-      expire key, ttl
+      queued(rpush key, value) {|result| result}
+      queued(expire key, ttl)
     end
   end
   
@@ -245,7 +245,7 @@ class RedisCall
         del(key) if result <= 0
         result
       end
-      expire key, ttl
+      queued(expire key, ttl)
     end
   end
   
