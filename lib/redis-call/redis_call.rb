@@ -197,6 +197,8 @@ class RedisCall
     @connection || (Thread.current[@pool_key] ||= Connection.new(@host, @port))
   end
   
+  alias_method :connect, :connection
+  
   def disconnect(thread = nil, limit = 10)
     begin
       connection.disconnect
