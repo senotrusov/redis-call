@@ -183,6 +183,14 @@ module RedisQueue
       llen(@key)
     end
     
+    def error_length
+      llen(@key/:error)
+    end
+
+    def backup_length
+      llen(@key/:backup)
+    end
+
     def delete
       del(@key)
     end
