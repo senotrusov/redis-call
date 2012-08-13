@@ -15,7 +15,7 @@
 
 
 module RedisQueue
-  class BackupElementNotFound < StandardError; end
+  class ElementNotFound < StandardError; end
     
   @config = {}
   
@@ -114,7 +114,13 @@ module RedisQueue
     
     def remove_raw_backup_element element
       queued(lrem(@key/:backup, -1, element)) do |result|
-        raise(RedisQueue::BackupElementNotFound, "Not found element #{element.inspect} in backup queue #{@key/:backup}") if result != 1
+        raise(RedisQueue::ElementNotFound, "Not found element #{element.inspect} in queue #{@key/:backup}") if result != 1
+      end
+    end
+    
+    def remove_raw_element element
+      queued(lrem(@key, -1, element)) do |result|
+        raise(RedisQueue::ElementNotFound, "Not found element #{element.inspect} in queue #{@key}") if result != 1
       end
     end
     
