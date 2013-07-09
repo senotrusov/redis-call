@@ -22,10 +22,10 @@ class RedisCall::Railtie < Rails::Railtie
         if (env = yaml[Rails.env]).kind_of?(Hash)
           RedisCall.config = env.with_indifferent_access
         else
-          STDERR.write "WARNING: #{config_file} hash does not contains key for current #{Rails.env} environment\n"
+          STDERR.write "WARNING: #{config_file} hash does not contain key for current #{Rails.env} environment\n"
         end
       else
-        STDERR.write "WARNING: #{config_file} does not contains a Hash\n"
+        STDERR.write "WARNING: #{config_file} does not contain a Hash\n"
       end
     end
     
@@ -39,7 +39,7 @@ class RedisQueue::Railtie < Rails::Railtie
       if (yaml = YAML.load_file(config_file)).kind_of?(Hash)
         RedisQueue.config = yaml.select {|queue, options| queue != "templates"}.with_indifferent_access
       else
-        STDERR.write "WARNING: #{config_file} does not contains a Hash\n"
+        STDERR.write "WARNING: #{config_file} does not contain a Hash\n"
       end
     end
 
