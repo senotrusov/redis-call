@@ -1,6 +1,6 @@
 # RedisCall
 
-A library to access Redis using [Hiredis](https://github.com/redis/hiredis), taking care of:
+A library to access Redis using [Hiredis](https://github.com/redis/hiredis) takes care of:
 
 * Connection managment
   * Per-thread connection
