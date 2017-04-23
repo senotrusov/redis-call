@@ -16,21 +16,21 @@
 
 begin
   require 'jeweler'
-  
+
   Jeweler::Tasks.new do |gemspec|
     gemspec.name = "redis-call"
-    gemspec.summary = ""
-    gemspec.email = "stan@senotrusov.com"
-    gemspec.homepage = "http://github.com/senotrusov/redis-call"
+    gemspec.licenses = ['Apache-2.0']
+    gemspec.summary = "Redis access library for Ruby: threads, handy key names, transactions and queues"
     gemspec.authors = ["Stanislav Senotrusov"]
-    
+    gemspec.email = "stan@senotrusov.com"
+    gemspec.homepage = "https://github.com/senotrusov/redis-call"
+
     gemspec.add_dependency 'hiredis'
     gemspec.add_dependency 'yajl-ruby'
   end
-  
+
   Jeweler::GemcutterTasks.new
-  
+
 rescue LoadError
   puts "Jeweler not available. Install it with: gem install jeweler"
 end
-

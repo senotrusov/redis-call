@@ -19,7 +19,7 @@ A [Redis](https://redis.io) access library, which provides:
 * JSON encode/decode
 * And nice ruby API
 
-It use [Hiredis](https://github.com/redis/hiredis) to connecto to [Redis](https://redis.io).
+It use [Hiredis](https://github.com/redis/hiredis) to connect to [Redis](https://redis.io).
 
 
 ## Basic operations
