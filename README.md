@@ -1,8 +1,8 @@
 # RedisCall
 
-A library to access Redis using [Hiredis](https://github.com/redis/hiredis) takes care of:
+A [Redis](https://redis.io) access library, which provides:
 
-* Connection managment
+* Connection management
   * Per-thread connection
   * Shared between threads connection
 * Key names construction
@@ -19,6 +19,8 @@ A library to access Redis using [Hiredis](https://github.com/redis/hiredis) take
 * JSON encode/decode
 * And nice ruby API
 
+It use [Hiredis](https://github.com/redis/hiredis) to connecto to [Redis](https://redis.io).
+
 
 ## Basic operations
 ```ruby
@@ -34,6 +36,7 @@ r.setex prefix/:bar/'qux', 1.day, 'content'
 r.get prefix/:bar/'qux'
 ```
 
+
 ## Custom storage class
 
 ```ruby
@@ -46,7 +49,6 @@ class MyStorage < RedisCall
   end
 end
 ```
-
 
 
 # Queues
@@ -92,7 +94,7 @@ class Handler
   def join
     @handler.log_join "Handler thread joined"
   end
-  
+
   def stop
     @queue.disconnect @handler
   end
@@ -112,7 +114,7 @@ class MyQueue < RedisQueue::Base
   def encode element
     super(element.as_json(:except => [:serialized]))
   end
-  
+
   def decode raw
     MyElement.new(super(raw))
   end
@@ -148,7 +150,7 @@ class QueueListController
   def filtered_id
     params[:id].tr('^A-Za-z0-9.', '')
   end
-  
+
   def index
     @queues = RedisQueue::Base.all
   end
@@ -191,7 +193,7 @@ class MessagesController
 
       if queue.raw_backup_elements.include? raw_message
         @message = queue.decode raw_message
-          
+
         if @message.valid?
 
           queue.multi do
@@ -258,3 +260,24 @@ end
 ```
 
 
+## Copyright and License
+
+```
+Copyright 2011 Stanislav Senotrusov
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+## Contributing
+
+Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
